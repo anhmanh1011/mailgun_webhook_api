@@ -511,7 +511,7 @@ def get_inbox_emails(recipient):
             query,
             {
                 '_id': 1,
-                'processed_data.email_data.body_html': 1
+                'request_form_data.body-html': 1
             }
         ).sort('timestamp', -1).skip(skip).limit(limit))
         
