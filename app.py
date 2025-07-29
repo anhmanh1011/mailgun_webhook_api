@@ -161,7 +161,10 @@ def mailgun_webhook():
         
         
         # Xác định loại webhook và xử lý dữ liệu
-        webhook_type = 'unknown'
+        if 'sender' in request.form:    
+            webhook_type = 'inbound_email'
+        else:
+            webhook_type = 'unknown'
         
         # # Kiểm tra nếu có event-data (webhook events)
         # if 'event-data' in request.form:
