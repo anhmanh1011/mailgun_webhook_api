@@ -118,67 +118,119 @@ def mailgun_webhook():
     try:
         # Log request data
         logger.info(f"Headers: {dict(request.headers)}")
-        logger.info(f"Form Data: {request.get_data(as_text=True)}")
+        logger.info(f"Form Data: {request.form.to_dict()}")
         logger.info(f"Raw Data Length: {len(request.get_data(as_text=True))}")
         
-        # Lấy dữ liệu từ webhook
-        webhook_data = {
+        # Tạo object request hoàn chỉnh để lưu vào database
+        request_object = {
             'timestamp': datetime.now(),
-            'headers': dict(request.headers),
-            'email_data': request.get_json(),
-            'raw_data': request.get_data(as_text=True),
-            'ip_address': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent', ''),
+            'request_metadata': {
+                'url': request.url,
+                'method': request.method,
+                'remote_addr': request.remote_addr,
+                'user_agent': request.headers.get('User-Agent', ''),
+                'content_type': request.headers.get('Content-Type', ''),
+                'content_length': request.headers.get('Content-Length', ''),
+                'host': request.headers.get('Host', ''),
+                'referer': request.headers.get('Referer', ''),
+                'accept': request.headers.get('Accept', ''),
+                'accept_encoding': request.headers.get('Accept-Encoding', ''),
+                'accept_language': request.headers.get('Accept-Language', ''),
+                'connection': request.headers.get('Connection', ''),
+                'x_forwarded_for': request.headers.get('X-Forwarded-For', ''),
+                'x_real_ip': request.headers.get('X-Real-IP', ''),
+                'x_forwarded_proto': request.headers.get('X-Forwarded-Proto', ''),
+            },
+            'request_headers': dict(request.headers),
+            'request_form_data': request.form.to_dict(),
+            'request_raw_data': request.get_data(as_text=True),
+            'request_json': None,
+            'request_args': dict(request.args),
+            'request_files': {},
+            'webhook_type': 'unknown',
+            'processed_data': {}
         }
         
-        # Xác định loại webhook và xử lý dữ liệu
-        webhook_data['webhook_type'] = 'inbound_email'  # Mặc định là inbound email
+        # Thử parse JSON nếu có
+        try:
+            if request.is_json:
+                request_object['request_json'] = request.get_json()
+        except Exception:
+            pass
         
+        
+        
+        # Xác định loại webhook và xử lý dữ liệu
+        webhook_type = 'unknown'
+        
+        # Kiểm tra nếu có event-data (webhook events)
+        if 'event-data' in request.form:
+            try:
+                import json
+                event_data = json.loads(request.form['event-data'])
+                webhook_type = 'email_event'
+                request_object['webhook_type'] = webhook_type
+                request_object['processed_data'] = {
+                    'event_type': event_data.get('event', 'unknown'),
+                    'message_id': event_data.get('message', {}).get('headers', {}).get('message-id', ''),
+                    'recipient': event_data.get('recipient', ''),
+                    'domain': event_data.get('domain', ''),
+                    'event_data': event_data
+                }
+                logger.info(f"Detected email event webhook: {event_data.get('event', 'unknown')}")
+            except json.JSONDecodeError:
+                logger.warning("Không thể parse event-data JSON")
         
         # Xử lý dữ liệu inbound email (dựa trên Postbin data)
-        # if 'sender' in request.form:
-        # webhook_data['email_data'] = {
-        #     'sender': request.form.get('sender', ''),
-        #     'from': request.form.get('from', ''),
-        #     'to': request.form.get('to', ''),
-        #     'subject': request.form.get('subject', ''),
-        #     'body_plain': request.form.get('body-plain', ''),
-        #     'body_html': request.form.get('body-html', ''),
-        #     'stripped_text': request.form.get('stripped-text', ''),
-        #     'stripped_html': request.form.get('stripped-html', ''),
-        #     'stripped_signature': request.form.get('stripped-signature', ''),
-        #     'message_id': request.form.get('message-id', ''),
-        #     'timestamp': request.form.get('timestamp', ''),
-        #     'token': request.form.get('token', ''),
-        #     'signature': request.form.get('signature', ''),
-        #     'attachment_count': request.form.get('attachment-count', '0'),
-        #     'recipient': request.form.get('recipient', ''),
-        #     'domain': request.form.get('domain', ''),
-        #     'message_headers': request.form.get('message-headers', ''),
-        #     'content_id_map': request.form.get('content-id-map', ''),
-        #     'attachments': []
-        # }
-            
-            # # Xử lý attachments nếu có
-            # attachment_count = int(request.form.get('attachment-count', 0))
-            # for i in range(attachment_count):
-            #     attachment_data = {
-            #         'name': request.form.get(f'attachment-{i+1}', ''),
-            #         'size': request.form.get(f'attachment-{i+1}-size', ''),
-            #         'content_type': request.form.get(f'attachment-{i+1}-content-type', ''),
-            #         'url': request.form.get(f'attachment-{i+1}-url', '')
-            #     }
-            #     webhook_data['email_data']['attachments'].append(attachment_data)
+        elif 'sender' in request.form:
+            webhook_type = 'inbound_email'
+            request_object['webhook_type'] = webhook_type
+            request_object['processed_data'] = {
+                'email_data': {
+                    'sender': request.form.get('sender', ''),
+                    'from': request.form.get('from', ''),
+                    'to': request.form.get('to', ''),
+                    'subject': request.form.get('subject', ''),
+                    'body_plain': request.form.get('body-plain', ''),
+                    'body_html': request.form.get('body-html', ''),
+                    'stripped_text': request.form.get('stripped-text', ''),
+                    'stripped_html': request.form.get('stripped-html', ''),
+                    'stripped_signature': request.form.get('stripped-signature', ''),
+                    'message_id': request.form.get('message-id', ''),
+                    'timestamp': request.form.get('timestamp', ''),
+                    'token': request.form.get('token', ''),
+                    'signature': request.form.get('signature', ''),
+                    'attachment_count': request.form.get('attachment-count', '0'),
+                    'recipient': request.form.get('recipient', ''),
+                    'domain': request.form.get('domain', ''),
+                    'message_headers': request.form.get('message-headers', ''),
+                    'content_id_map': request.form.get('content-id-map', ''),
+                    'attachments': []
+                }
+            }
+            logger.info(f"Detected inbound email webhook from: {request.form.get('from', 'N/A')}")
+        
+        # Nếu không xác định được loại, lưu dữ liệu gốc
+        else:
+            request_object['webhook_type'] = 'unknown'
+            request_object['processed_data'] = {
+                'raw_form_data': request.form.to_dict(),
+                'raw_headers': dict(request.headers)
+            }
+            logger.info("Unknown webhook type, saving raw data")
         
         # Lưu vào MongoDB
         if mongodb_client is not None and webhooks_collection is not None:
-            result = webhooks_collection.insert_one(webhook_data)
+            result = webhooks_collection.insert_one(request_object)
             logger.info(f"[SUCCESS] Webhook saved successfully with ID: {result.inserted_id}")
+            logger.info(f"Webhook type: {webhook_type}")
+            logger.info(f"Request object size: {len(str(request_object))} characters")
             
             response_data = {
                 'status': 'success',
                 'message': 'Webhook đã được xử lý và lưu thành công',
                 'webhook_id': str(result.inserted_id),
+                'webhook_type': webhook_type,
                 'timestamp': datetime.now().isoformat()
             }
             logger.info(f"Webhook response: {response_data}")
@@ -333,7 +385,7 @@ def search_emails_by_recipient():
         # Tìm kiếm webhooks có email_data.to khớp với to_email
         query = {
             'webhook_type': 'inbound_email',
-            'email_data.to': {'$regex': to_email, '$options': 'i'}  # Case-insensitive search
+            'processed_data.email_data.to': {'$regex': to_email, '$options': 'i'}  # Case-insensitive search
         }
         
         # Lấy emails từ MongoDB
@@ -342,15 +394,15 @@ def search_emails_by_recipient():
             {
                 '_id': 1,
                 'timestamp': 1,
-                'email_data.from': 1,
-                'email_data.to': 1,
-                'email_data.subject': 1,
-                'email_data.body_plain': 1,
-                'email_data.body_html': 1,
-                'email_data.stripped_text': 1,
-                'email_data.stripped_html': 1,
-                'email_data.attachment_count': 1,
-                'email_data.message_id': 1
+                'processed_data.email_data.from': 1,
+                'processed_data.email_data.to': 1,
+                'processed_data.email_data.subject': 1,
+                'processed_data.email_data.body_plain': 1,
+                'processed_data.email_data.body_html': 1,
+                'processed_data.email_data.stripped_text': 1,
+                'processed_data.email_data.stripped_html': 1,
+                'processed_data.email_data.attachment_count': 1,
+                'processed_data.email_data.message_id': 1
             }
         ).sort('timestamp', -1).skip(skip).limit(limit))
         
@@ -439,43 +491,46 @@ def get_inbox_emails(recipient):
         # Lấy tham số query
         limit = int(request.args.get('limit', 50))
         skip = int(request.args.get('skip', 0))
+        subject_filter = request.args.get('subject', 'verification code').strip()
+        
         # Tìm kiếm emails chính xác theo recipient
         query = {
             'webhook_type': 'inbound_email',
-            'email_data.to': recipient,
-            "email_data.subject": {
-                "$regex": "verification code",  # tự động tìm chứa chuỗi
-                "$options": "i"  # không phân biệt chữ hoa chữ thường
-            }
+            'processed_data.email_data.to': recipient
         }
         
         # Thêm filter theo subject (mặc định là "verification code")
+        query['processed_data.email_data.subject'] = {'$regex': subject_filter, '$options': 'i'}
+        logger.info(f"Using subject filter: '{subject_filter}'")
         
         # Lấy emails từ MongoDB chỉ với body_html
         emails = list(webhooks_collection.find(
             query,
             {
                 '_id': 1,
-                'email_data.body_html': 1
+                'processed_data.email_data.body_html': 1
             }
         ).sort('timestamp', -1).skip(skip).limit(limit))
         
         # Chuẩn bị response HTML thuần túy
         html_contents = []
         for email in emails:
-            body_html = email.get('email_data', {}).get('body_html', '')
+            email_data = email.get('processed_data', {}).get('email_data', {})
+            body_html = email_data.get('body_html', '')
             if body_html:
                 html_contents.append(body_html)
         
         # Trả về HTML thuần túy
         if html_contents:
             combined_html = "\n".join(html_contents)
+            logger.info(f"[SUCCESS] Get inbox emails successful: {len(html_contents)} HTML emails found for '{recipient}' with subject='{subject_filter}'")
             logger.info(f"Combined HTML length: {len(combined_html)} characters")
             logger.info(f"Response Content-Type: text/html; charset=utf-8")
             return combined_html, 200, {'Content-Type': 'text/html; charset=utf-8'}
         else:
+            logger.warning(f"[WARNING] No HTML emails found for recipient: {recipient} with subject='{subject_filter}'")
             logger.info(f"Response Content-Type: text/html; charset=utf-8")
-            return "<p>not found</p>  ", 404, {'Content-Type': 'text/html; charset=utf-8'}
+            return "<p>not found</p>", 404, {'Content-Type': 'text/html; charset=utf-8'}
         
     except Exception as e:
         logger.error(f"[ERROR] Get inbox emails error: {e}")
@@ -508,7 +563,7 @@ def get_email_html_content(email_id):
                 'message': 'Không tìm thấy email'
             }), 404
         
-        email_data = email.get('email_data', {})
+        email_data = email.get('processed_data', {}).get('email_data', {})
         html_content = email_data.get('body_html', '')
         stripped_html = email_data.get('stripped_html', '')
         
