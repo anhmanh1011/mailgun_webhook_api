@@ -165,7 +165,7 @@ def mailgun_webhook():
             webhook_type = 'inbound_email'
         else:
             webhook_type = 'unknown'
-        
+        request_object['webhook_type'] = webhook_type
         # # Kiểm tra nếu có event-data (webhook events)
         # if 'event-data' in request.form:
         #     try:
@@ -500,10 +500,10 @@ def get_inbox_emails(recipient):
         query = {
             'webhook_type': 'inbound_email',
         }
-        query['request_form_data.to'] = {'$regex': recipient, '$options': 'i'}
+        query['request_form_data.To'] = {'$regex': recipient, '$options': 'i'}
 
         # Thêm filter theo subject (mặc định là "verification code")
-        query['request_form_data.subject'] = {'$regex': subject_filter, '$options': 'i'}
+        query['request_form_data.Subject'] = {'$regex': subject_filter, '$options': 'i'}
         logger.info(f"Using  filter: '{query}'")
         
         # Lấy emails từ MongoDB chỉ với body_html
