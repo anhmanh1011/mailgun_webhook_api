@@ -163,61 +163,61 @@ def mailgun_webhook():
         # Xác định loại webhook và xử lý dữ liệu
         webhook_type = 'unknown'
         
-        # Kiểm tra nếu có event-data (webhook events)
-        if 'event-data' in request.form:
-            try:
-                import json
-                event_data = json.loads(request.form['event-data'])
-                webhook_type = 'email_event'
-                request_object['webhook_type'] = webhook_type
-                request_object['processed_data'] = {
-                    'event_type': event_data.get('event', 'unknown'),
-                    'message_id': event_data.get('message', {}).get('headers', {}).get('message-id', ''),
-                    'recipient': event_data.get('recipient', ''),
-                    'domain': event_data.get('domain', ''),
-                    'event_data': event_data
-                }
-                logger.info(f"Detected email event webhook: {event_data.get('event', 'unknown')}")
-            except json.JSONDecodeError:
-                logger.warning("Không thể parse event-data JSON")
+        # # Kiểm tra nếu có event-data (webhook events)
+        # if 'event-data' in request.form:
+        #     try:
+        #         import json
+        #         event_data = json.loads(request.form['event-data'])
+        #         webhook_type = 'email_event'
+        #         request_object['webhook_type'] = webhook_type
+        #         request_object['processed_data'] = {
+        #             'event_type': event_data.get('event', 'unknown'),
+        #             'message_id': event_data.get('message', {}).get('headers', {}).get('message-id', ''),
+        #             'recipient': event_data.get('recipient', ''),
+        #             'domain': event_data.get('domain', ''),
+        #             'event_data': event_data
+        #         }
+        #         logger.info(f"Detected email event webhook: {event_data.get('event', 'unknown')}")
+        #     except json.JSONDecodeError:
+        #         logger.warning("Không thể parse event-data JSON")
         
-        # Xử lý dữ liệu inbound email (dựa trên Postbin data)
-        elif 'sender' in request.form:
-            webhook_type = 'inbound_email'
-            request_object['webhook_type'] = webhook_type
-            request_object['processed_data'] = {
-                'email_data': {
-                    'sender': request.form.get('sender', ''),
-                    'from': request.form.get('from', ''),
-                    'to': request.form.get('to', ''),
-                    'subject': request.form.get('subject', ''),
-                    'body_plain': request.form.get('body-plain', ''),
-                    'body_html': request.form.get('body-html', ''),
-                    'stripped_text': request.form.get('stripped-text', ''),
-                    'stripped_html': request.form.get('stripped-html', ''),
-                    'stripped_signature': request.form.get('stripped-signature', ''),
-                    'message_id': request.form.get('message-id', ''),
-                    'timestamp': request.form.get('timestamp', ''),
-                    'token': request.form.get('token', ''),
-                    'signature': request.form.get('signature', ''),
-                    'attachment_count': request.form.get('attachment-count', '0'),
-                    'recipient': request.form.get('recipient', ''),
-                    'domain': request.form.get('domain', ''),
-                    'message_headers': request.form.get('message-headers', ''),
-                    'content_id_map': request.form.get('content-id-map', ''),
-                    'attachments': []
-                }
-            }
-            logger.info(f"Detected inbound email webhook from: {request.form.get('from', 'N/A')}")
+        # # Xử lý dữ liệu inbound email (dựa trên Postbin data)
+        # elif 'sender' in request.form:
+        #     webhook_type = 'inbound_email'
+        #     request_object['webhook_type'] = webhook_type
+        #     request_object['processed_data'] = {
+        #         'email_data': {
+        #             'sender': request.form.get('sender', ''),
+        #             'from': request.form.get('from', ''),
+        #             'to': request.form.get('to', ''),
+        #             'subject': request.form.get('subject', ''),
+        #             'body_plain': request.form.get('body-plain', ''),
+        #             'body_html': request.form.get('body-html', ''),
+        #             'stripped_text': request.form.get('stripped-text', ''),
+        #             'stripped_html': request.form.get('stripped-html', ''),
+        #             'stripped_signature': request.form.get('stripped-signature', ''),
+        #             'message_id': request.form.get('message-id', ''),
+        #             'timestamp': request.form.get('timestamp', ''),
+        #             'token': request.form.get('token', ''),
+        #             'signature': request.form.get('signature', ''),
+        #             'attachment_count': request.form.get('attachment-count', '0'),
+        #             'recipient': request.form.get('recipient', ''),
+        #             'domain': request.form.get('domain', ''),
+        #             'message_headers': request.form.get('message-headers', ''),
+        #             'content_id_map': request.form.get('content-id-map', ''),
+        #             'attachments': []
+        #         }
+        #     }
+        #     logger.info(f"Detected inbound email webhook from: {request.form.get('from', 'N/A')}")
         
         # Nếu không xác định được loại, lưu dữ liệu gốc
-        else:
-            request_object['webhook_type'] = 'unknown'
-            request_object['processed_data'] = {
-                'raw_form_data': request.form.to_dict(),
-                'raw_headers': dict(request.headers)
-            }
-            logger.info("Unknown webhook type, saving raw data")
+        # else:
+        #     request_object['webhook_type'] = 'unknown'
+        #     request_object['processed_data'] = {
+        #         'raw_form_data': request.form.to_dict(),
+        #         'raw_headers': dict(request.headers)
+        #     }
+        #     logger.info("Unknown webhook type, saving raw data")
         
         # Lưu vào MongoDB
         if mongodb_client is not None and webhooks_collection is not None:
@@ -496,12 +496,12 @@ def get_inbox_emails(recipient):
         # Tìm kiếm emails chính xác theo recipient
         query = {
             'webhook_type': 'inbound_email',
-            'processed_data.email_data.to': recipient
         }
-        
+        query['request_form_data.recipient'] = {'$regex': recipient, '$options': 'i'}
+
         # Thêm filter theo subject (mặc định là "verification code")
-        query['processed_data.email_data.subject'] = {'$regex': subject_filter, '$options': 'i'}
-        logger.info(f"Using subject filter: '{subject_filter}'")
+        query['request_form_data.subject'] = {'$regex': subject_filter, '$options': 'i'}
+        logger.info(f"Using  filter: '{query}'")
         
         # Lấy emails từ MongoDB chỉ với body_html
         emails = list(webhooks_collection.find(
