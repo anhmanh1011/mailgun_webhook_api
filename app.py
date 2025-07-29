@@ -500,7 +500,7 @@ def get_inbox_emails(recipient):
         query = {
             'webhook_type': 'inbound_email',
         }
-        query['request_form_data.recipient'] = {'$regex': recipient, '$options': 'i'}
+        query['request_form_data.to'] = {'$regex': recipient, '$options': 'i'}
 
         # Thêm filter theo subject (mặc định là "verification code")
         query['request_form_data.subject'] = {'$regex': subject_filter, '$options': 'i'}
