@@ -518,8 +518,8 @@ def get_inbox_emails(recipient):
         # Chuẩn bị response HTML thuần túy
         html_contents = []
         for email in emails:
-            email_data = email.get('processed_data', {}).get('email_data', {})
-            body_html = email_data.get('body_html', '')
+            body_html = email.get('request_form_data', {}).get('body-html', {})
+            # body_html = email_data.get('body_html', '')
             if body_html:
                 html_contents.append(body_html)
         
